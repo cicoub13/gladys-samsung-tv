@@ -6,21 +6,31 @@
     "en": "Control your Samsung Smart TVs (Tizen) over the local network: power, volume, mute and input source.",
     "fr": "Pilotez vos TV Samsung (Tizen) sur le réseau local : allumage, volume, sourdine et source."
   },
-  "version": "1.0.0",
-  "docker_image": "ghcr.io/cicoub13/gladys-samsung-tv:1.0.0",
+  "version": "1.0.1",
+  "docker_image": "ghcr.io/cicoub13/gladys-samsung-tv:1.0.1",
   "gladys_version": ">=4.86.0",
   "cover_image": "https://raw.githubusercontent.com/cicoub13/gladys-samsung-tv/main/cover.png",
-  "categories": ["multimedia"],
-  "transports": ["local"],
+  "categories": [
+    "multimedia"
+  ],
+  "transports": [
+    "local"
+  ],
   "network_discovery": [
-    { "type": "ssdp", "st": "urn:schemas-upnp-org:service:RenderingControl:1" }
+    {
+      "type": "ssdp",
+      "st": "urn:schemas-upnp-org:service:RenderingControl:1"
+    }
   ],
   "network_wake": true,
   "config_schema": [
     {
       "key": "discovery",
       "type": "section",
-      "label": { "en": "Finding your TV", "fr": "Trouver votre téléviseur" },
+      "label": {
+        "en": "Finding your TV",
+        "fr": "Trouver votre téléviseur"
+      },
       "description": {
         "en": "Turn the television ON before running a scan from the Discovery tab. A TV in standby cuts its network interface off: it answers nothing, and no scan can find it. If the scan comes back empty, switch the TV on, wait a few seconds, and scan again.",
         "fr": "Allumez le téléviseur AVANT de lancer un scan depuis l'onglet Découverte. Une TV en veille coupe son interface réseau : elle ne répond plus à rien, et aucun scan ne peut la trouver. Si le scan ne remonte rien, allumez la TV, patientez quelques secondes, puis relancez un scan."
@@ -29,7 +39,10 @@
     {
       "key": "intro",
       "type": "section",
-      "label": { "en": "Before you start", "fr": "Avant de commencer" },
+      "label": {
+        "en": "Before you start",
+        "fr": "Avant de commencer"
+      },
       "description": {
         "en": "Two settings on the TV itself matter. The first time Gladys sends a command, the TV asks you to authorize it: accept on screen, this happens only once. To turn the TV back ON, Gladys sends a Wake-on-LAN packet, which requires the wake-on-network option to be enabled on the TV (Settings > General > Network > Expert settings).",
         "fr": "Deux réglages sur la TV comptent. À la première commande envoyée par Gladys, la TV demande de l'autoriser : acceptez à l'écran, cela n'arrive qu'une fois. Pour rallumer la TV, Gladys envoie un paquet Wake-on-LAN, ce qui exige d'activer le réveil réseau sur la TV (Paramètres > Général > Réseau > Paramètres experts)."
@@ -38,7 +51,10 @@
     {
       "key": "poll_frequency",
       "type": "select",
-      "label": { "en": "Refresh interval", "fr": "Intervalle de rafraîchissement" },
+      "label": {
+        "en": "Refresh interval",
+        "fr": "Intervalle de rafraîchissement"
+      },
       "description": {
         "en": "How often the power state, volume and mute are read back from the TV.",
         "fr": "Fréquence à laquelle l'état, le volume et la sourdine sont relus sur la TV."
@@ -46,24 +62,54 @@
       "required": false,
       "default": "30000",
       "options": [
-        { "value": "10000", "label": { "en": "Every 10 seconds", "fr": "Toutes les 10 secondes" } },
-        { "value": "15000", "label": { "en": "Every 15 seconds", "fr": "Toutes les 15 secondes" } },
-        { "value": "30000", "label": { "en": "Every 30 seconds", "fr": "Toutes les 30 secondes" } },
-        { "value": "60000", "label": { "en": "Every minute", "fr": "Toutes les minutes" } }
+        {
+          "value": "10000",
+          "label": {
+            "en": "Every 10 seconds",
+            "fr": "Toutes les 10 secondes"
+          }
+        },
+        {
+          "value": "15000",
+          "label": {
+            "en": "Every 15 seconds",
+            "fr": "Toutes les 15 secondes"
+          }
+        },
+        {
+          "value": "30000",
+          "label": {
+            "en": "Every 30 seconds",
+            "fr": "Toutes les 30 secondes"
+          }
+        },
+        {
+          "value": "60000",
+          "label": {
+            "en": "Every minute",
+            "fr": "Toutes les minutes"
+          }
+        }
       ]
     }
   ],
   "actions": [
     {
       "key": "test_connection",
-      "label": { "en": "Test the connection", "fr": "Tester la connexion" },
+      "label": {
+        "en": "Test the connection",
+        "fr": "Tester la connexion"
+      },
       "timeout_seconds": 15,
       "fields": [
         {
           "key": "device",
           "type": "select",
           "source": "devices",
-          "label": { "en": "Television", "fr": "Téléviseur" },
+          "label": {
+            "en": "Television",
+            "fr": "Téléviseur"
+          },
           "required": true
         }
       ]

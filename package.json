@@ -1,6 +1,6 @@
 {
   "name": "gladys-samsung-tv",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Gladys Assistant external integration to control Samsung Smart TVs (Tizen) over the local network.",
   "type": "module",
