@@ -15,8 +15,12 @@ aucun compte Samsung, aucun passage par le cloud.
 
 ## Installation
 
-1. Installez l'intégration depuis le store, puis ouvrez l'onglet **Découverte** et lancez un scan. Votre téléviseur
-   apparaît sous son propre nom (« Samsung AU7025 55 TV », par exemple). Créez-le.
+1. **Allumez votre téléviseur**, puis ouvrez l'onglet **Découverte** et lancez un scan. Il apparaît sous son propre
+   nom (« Samsung AU7025 55 TV », par exemple). Créez-le.
+
+   Une TV en veille coupe son interface réseau : elle ne répond à rien et aucun scan ne peut la détecter. Un scan
+   qui ne remonte rien est presque toujours un téléviseur éteint — allumez-le et relancez.
+
 2. Actionnez une première commande, par exemple **Volume +**. La TV affiche alors une demande d'autorisation pour
    « Gladys » : **acceptez-la avec la télécommande**. Cela n'arrive qu'une seule fois, le jeton est ensuite conservé.
 

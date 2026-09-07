@@ -18,6 +18,15 @@
   "network_wake": true,
   "config_schema": [
     {
+      "key": "discovery",
+      "type": "section",
+      "label": { "en": "Finding your TV", "fr": "Trouver votre téléviseur" },
+      "description": {
+        "en": "Turn the television ON before running a scan from the Discovery tab. A TV in standby cuts its network interface off: it answers nothing, and no scan can find it. If the scan comes back empty, switch the TV on, wait a few seconds, and scan again.",
+        "fr": "Allumez le téléviseur AVANT de lancer un scan depuis l'onglet Découverte. Une TV en veille coupe son interface réseau : elle ne répond plus à rien, et aucun scan ne peut la trouver. Si le scan ne remonte rien, allumez la TV, patientez quelques secondes, puis relancez un scan."
+      }
+    },
+    {
       "key": "intro",
       "type": "section",
       "label": { "en": "Before you start", "fr": "Avant de commencer" },

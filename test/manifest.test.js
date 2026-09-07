@@ -22,6 +22,16 @@ test('a single SSDP capture is declared, since the core only scans the first', (
   assert.equal(manifest.network_discovery.length, 1);
 });
 
+test('the config screen opens on the "turn the TV on" warning', () => {
+  // The Discovery screen has no channel for an integration message, but its
+  // empty state points here — and only when a config_schema is declared. So
+  // this section is where a user whose scan found nothing actually lands.
+  const [first] = manifest.config_schema;
+  assert.equal(first.type, 'section');
+  assert.match(first.description.en, /standby/i);
+  assert.match(first.description.fr, /veille/i);
+});
+
 test('the cover image is served from this repository', () => {
   assert.match(manifest.cover_image, /^https:\/\/raw\.githubusercontent\.com\/.+\/cover\.png$/);
 });

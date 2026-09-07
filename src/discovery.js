@@ -57,6 +57,15 @@ export async function discoverTelevisions(gladys) {
   );
 
   const televisions = identified.filter((info) => info !== null);
-  logger.info(`${televisions.length} Samsung TV(s) identified`);
+  if (televisions.length === 0) {
+    // By far the most common cause, and one the Discovery screen cannot guess:
+    // a TV in standby shuts its network interface down and answers nothing.
+    logger.warn(
+      'No Samsung TV found. A television in standby is invisible on the network: ' +
+        'turn it on, then run the scan again.',
+    );
+  } else {
+    logger.info(`${televisions.length} Samsung TV(s) identified`);
+  }
   return televisions;
 }

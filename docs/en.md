@@ -15,8 +15,12 @@ Samsung account, nothing going through the cloud.
 
 ## Setup
 
-1. Install the integration from the store, open the **Discovery** tab and run a scan. Your television shows up under
-   its own name ("Samsung AU7025 55 TV", for instance). Create it.
+1. **Turn your television on**, then open the **Discovery** tab and run a scan. It shows up under its own name
+   ("Samsung AU7025 55 TV", for instance). Create it.
+
+   A TV in standby shuts its network interface down: it answers nothing and no scan can find it. A scan that comes
+   back empty is almost always a television that is off — switch it on and scan again.
+
 2. Run a first command, Volume up for example. The TV then displays an authorization prompt for "Gladys":
    **accept it with the remote**. This happens only once, the token is kept afterwards.
 
