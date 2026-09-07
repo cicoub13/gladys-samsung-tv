@@ -22,6 +22,26 @@ test('a single SSDP capture is declared, since the core only scans the first', (
   assert.equal(manifest.network_discovery.length, 1);
 });
 
+test('the cover image is served from this repository', () => {
+  assert.match(manifest.cover_image, /^https:\/\/raw\.githubusercontent\.com\/.+\/cover\.png$/);
+});
+
+test('the cover image meets what the store indexer requires', async () => {
+  const cover = await readFile(new URL('../cover.png', import.meta.url));
+
+  // The indexer wants a PNG or JPEG of exactly 800x534, 150 KB max: an invalid
+  // cover is not a rejection, it is silently replaced by a placeholder, so the
+  // only way to notice a bad one is to check it here.
+  assert.ok(
+    cover.length <= 150 * 1024,
+    `cover.png is ${cover.length} bytes, over the 150 KB limit`,
+  );
+  assert.deepEqual([...cover.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  // Width and height are big-endian 32-bit integers in the IHDR chunk.
+  assert.equal(cover.readUInt32BE(16), 800);
+  assert.equal(cover.readUInt32BE(20), 534);
+});
+
 test('the refresh options match the frequencies Gladys can schedule', () => {
   const field = manifest.config_schema.find((f) => f.key === 'poll_frequency');
   assert.deepEqual(
