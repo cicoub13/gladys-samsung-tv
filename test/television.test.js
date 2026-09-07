@@ -63,6 +63,17 @@ test('buildDevice exposes the six features with a valid poll frequency', () => {
   assert.equal(volume.has_feedback, true);
 });
 
+test('every feature declares min and max, which the database requires', () => {
+  // t_device_feature.min and .max are NOT NULL for every feature, with no
+  // exception for the types where a range means nothing: omitting them makes
+  // device creation fail with a 422 the user cannot do anything about.
+  const device = buildDevice(createFakeGladys(), INFO, normalizeConfig(), []);
+  for (const feature of device.features) {
+    assert.equal(typeof feature.min, 'number', `${feature.name} has no min`);
+    assert.equal(typeof feature.max, 'number', `${feature.name} has no max`);
+  }
+});
+
 test('buildDevice carries the IP and MAC needed to reach the TV', () => {
   const device = buildDevice(createFakeGladys(), INFO, normalizeConfig(), []);
   assert.deepEqual(device.params, [

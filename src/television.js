@@ -141,6 +141,10 @@ export function buildDevice(gladys, info, config, apps = []) {
         external_id: ids.feature(FEATURE.SOURCE),
         category: DEVICE_FEATURE_CATEGORIES.TEXT,
         type: DEVICE_FEATURE_TYPES.TEXT.SELECT,
+        // Meaningless on a select whose value is a string, but the column is
+        // NOT NULL for every feature: 0/0 is what Gladys itself stores here.
+        min: 0,
+        max: 0,
         read_only: false,
         has_feedback: false,
         keep_history: false,
