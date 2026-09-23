@@ -129,3 +129,42 @@ test('after a reconnection every state is published again', async () => {
 
   assert.equal(gladys.published.length, 2);
 });
+
+test('another TV answering at the address counts as unreachable, with one warning', async () => {
+  const device = createdDevice('uuid:living-room');
+  // DHCP handed the living-room address to the bedroom TV.
+  tvPayload = restPayload('uuid:bedroom', 'on');
+  const gladys = createFakeGladys();
+  const warnings = [];
+  mock.method(console, 'error', (...args) => warnings.push(args.join(' ')));
+
+  await pollDevice(gladys, device);
+  await pollDevice(gladys, device);
+
+  assert.deepEqual(gladys.published, [
+    { featureExternalId: feature(device, FEATURE.POWER), state: 0 },
+  ]);
+  assert.ok(
+    calls.every((url) => !url.includes(':9197')),
+    'the volume of the other TV is not read',
+  );
+  const moved = warnings.filter((line) => line.includes('different device'));
+  assert.equal(moved.length, 1, 'warned once, not on every poll');
+  assert.ok(moved[0].includes(IP) && moved[0].includes('rescan'));
+});
+
+test('the warning comes back if the address changes hands again', async () => {
+  const device = createdDevice('uuid:moving');
+  const gladys = createFakeGladys();
+  const warnings = [];
+  mock.method(console, 'error', (...args) => warnings.push(args.join(' ')));
+
+  tvPayload = restPayload('uuid:other', 'on');
+  await pollDevice(gladys, device);
+  tvPayload = restPayload('uuid:moving', 'standby');
+  await pollDevice(gladys, device);
+  tvPayload = restPayload('uuid:other', 'on');
+  await pollDevice(gladys, device);
+
+  assert.equal(warnings.filter((line) => line.includes('different device')).length, 2);
+});
