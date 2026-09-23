@@ -113,7 +113,8 @@ gladys.handleShutdown((signal) => {
 
 // --- Startup -----------------------------------------------------------------
 logger.info('Starting the Samsung Smart TV integration...');
+// A token refused at boot can be transient (Gladys still starting): the SDK
+// keeps reconnecting for life, so exiting here would only stop the retries.
 gladys.connect().catch((err) => {
-  logger.error('Initial connection failed', err);
-  process.exit(1);
+  logger.error(`Initial connection failed: ${err.message} (retrying in the background)`);
 });
