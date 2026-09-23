@@ -111,6 +111,14 @@ gladys.handleShutdown((signal) => {
   closeConnections();
 });
 
+// --- Safety net --------------------------------------------------------------
+// A rejection nobody handles means the process state is unknown: log why, then
+// exit and let the Gladys supervisor restart the integration from scratch.
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled promise rejection, exiting:', reason);
+  process.exit(1);
+});
+
 // --- Startup -----------------------------------------------------------------
 logger.info('Starting the Samsung Smart TV integration...');
 // A token refused at boot can be transient (Gladys still starting): the SDK

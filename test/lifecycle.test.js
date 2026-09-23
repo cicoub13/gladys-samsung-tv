@@ -89,3 +89,19 @@ test('a token refused at boot is logged, and the process stays up to retry', asy
     child.kill('SIGKILL');
   }
 });
+
+test('an unhandled rejection is logged with its reason, then the process exits', async () => {
+  // The stub never authenticates: the integration just sits connected.
+  const url = await stubGladys(() => {});
+  const child = startIntegration(url, [
+    '--import',
+    'data:text/javascript,setTimeout(() => Promise.reject(new Error("boom")), 500)',
+  ]);
+  try {
+    const [code] = await once(child, 'exit');
+    assert.equal(code, 1);
+    assert.match(child.output, /\[ERROR\].*Unhandled promise rejection.*boom/);
+  } finally {
+    child.kill('SIGKILL');
+  }
+});
