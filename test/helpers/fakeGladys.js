@@ -5,8 +5,17 @@
 // call so the tests can assert on them, without a running Gladys server.
 // -----------------------------------------------------------------------------
 
-export function createFakeGladys({ scanResults = [] } = {}) {
+export function createFakeGladys({ scanResults = [], publishFailures = 0 } = {}) {
   const published = [];
+  // The host API refusing a publication (Gladys restarting, 429...): the next
+  // `publishFailures` calls throw, the following ones succeed.
+  let failuresLeft = publishFailures;
+  const refusePublish = () => {
+    if (failuresLeft > 0) {
+      failuresLeft -= 1;
+      throw new Error('503 Service Unavailable');
+    }
+  };
   const discovered = [];
   const wakeOnLanCalls = [];
   const connectionStatuses = [];
@@ -27,10 +36,12 @@ export function createFakeGladys({ scanResults = [] } = {}) {
     },
 
     async publishState(featureExternalId, state) {
+      refusePublish();
       published.push({ featureExternalId, state });
     },
 
     async publishStates(states) {
+      refusePublish();
       for (const s of states) {
         published.push({ featureExternalId: s.device_feature_external_id, state: s.state });
       }

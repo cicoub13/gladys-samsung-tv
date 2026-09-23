@@ -220,10 +220,31 @@ async function publishChanges(gladys, states) {
   if (changed.length === 0) {
     return;
   }
-  changed.forEach(({ external_id: id, state }) => lastPublished.set(id, state));
   await gladys.publishStates(
     changed.map(({ external_id: id, state }) => ({ device_feature_external_id: id, state })),
   );
+  // Only once Gladys has them: a refused batch must be sent again next poll.
+  changed.forEach(({ external_id: id, state }) => lastPublished.set(id, state));
+}
+
+/**
+ * Forget what was published, so the next poll publishes every state again.
+ * @param {object} [device] - Device whose states to forget; every device when omitted.
+ * @returns {void} Nothing.
+ * @example
+ * forgetPublished(device);
+ */
+export function forgetPublished(device) {
+  if (!device) {
+    lastPublished.clear();
+    return;
+  }
+  const prefix = `${device.external_id}:`;
+  for (const id of lastPublished.keys()) {
+    if (id.startsWith(prefix)) {
+      lastPublished.delete(id);
+    }
+  }
 }
 
 /**
@@ -317,8 +338,8 @@ async function selectSource(tv, value) {
  * await publishFeedback(gladys, feature, 20);
  */
 async function publishFeedback(gladys, feature, state) {
-  lastPublished.set(feature.external_id, state);
   await gladys.publishState(feature.external_id, state);
+  lastPublished.set(feature.external_id, state);
 }
 
 /**
