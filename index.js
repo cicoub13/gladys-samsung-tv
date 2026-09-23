@@ -12,7 +12,14 @@
 import { GladysIntegration, logger } from '@gladysassistant/integration-sdk';
 import { normalizeConfig } from './src/config.js';
 import { discoverTelevisions } from './src/discovery.js';
-import { buildDevice, pollDevice, setValue, readTarget, readApps } from './src/television.js';
+import {
+  buildDevice,
+  pollDevice,
+  setValue,
+  readTarget,
+  readApps,
+  forgetPublished,
+} from './src/television.js';
 import { fetchDeviceInfo, isPoweredOn } from './src/samsung/rest.js';
 import { getVolume } from './src/samsung/upnp.js';
 import { closeConnections } from './src/samsung/remote.js';
@@ -45,6 +52,8 @@ gladys.onPoll(async (device) => {
 // --- A device disappeared: drop what we held for it --------------------------
 gladys.onDeviceDeleted(async (device) => {
   closeConnections(readTarget(device).id);
+  // A device created again under the same external_id must get its states.
+  forgetPublished(device);
 });
 
 // --- Manifest action: the "Test the connection" button -----------------------
@@ -76,6 +85,8 @@ gladys.onConfigUpdated(async (newConfig) => {
 
 // --- Connection lifecycle ----------------------------------------------------
 gladys.on('connected', async () => {
+  // Publications may have failed while Gladys was away: republish everything.
+  forgetPublished();
   try {
     config = normalizeConfig(await gladys.getConfig());
     await gladys.setConnectionStatus(true);
@@ -100,9 +111,18 @@ gladys.handleShutdown((signal) => {
   closeConnections();
 });
 
+// --- Safety net --------------------------------------------------------------
+// A rejection nobody handles means the process state is unknown: log why, then
+// exit and let the Gladys supervisor restart the integration from scratch.
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled promise rejection, exiting:', reason);
+  process.exit(1);
+});
+
 // --- Startup -----------------------------------------------------------------
 logger.info('Starting the Samsung Smart TV integration...');
+// A token refused at boot can be transient (Gladys still starting): the SDK
+// keeps reconnecting for life, so exiting here would only stop the retries.
 gladys.connect().catch((err) => {
-  logger.error('Initial connection failed', err);
-  process.exit(1);
+  logger.error(`Initial connection failed: ${err.message} (retrying in the background)`);
 });
