@@ -10,13 +10,16 @@
 // straight from a dev machine possible (no /data there).
 // -----------------------------------------------------------------------------
 
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, rename } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { createLogger } from '@gladysassistant/integration-sdk';
 
 const logger = createLogger({ name: 'samsung:token' });
 
 const filePath = () => join(process.env.DATA_DIR ?? '/data', 'tokens.json');
+
+/** Tail of the write queue: writes run one after the other, never interleaved. */
+let writing = Promise.resolve();
 
 /**
  * Read the whole token file.
@@ -26,7 +29,11 @@ const filePath = () => join(process.env.DATA_DIR ?? '/data', 'tokens.json');
  */
 async function readTokens() {
   try {
-    return JSON.parse(await readFile(filePath(), 'utf8'));
+    const tokens = JSON.parse(await readFile(filePath(), 'utf8'));
+    if (tokens === null || typeof tokens !== 'object' || Array.isArray(tokens)) {
+      throw new Error('not a JSON object');
+    }
+    return tokens;
   } catch (err) {
     // No file yet (first run) or unreadable content: start from scratch rather
     // than crash. The worst case is one extra prompt on the TV.
@@ -56,15 +63,36 @@ export async function getToken(tvId) {
  * @example
  * await saveToken('uuid:261dc719-...', '12345678');
  */
-export async function saveToken(tvId, token) {
+export function saveToken(tvId, token) {
+  // Queued: two TVs paired during the same scan would otherwise both read the
+  // file before either writes it, and one of the tokens would be lost.
+  writing = writing.then(() => writeToken(tvId, token));
+  return writing;
+}
+
+/**
+ * Store the token of one TV, atomically.
+ * @param {string} tvId - Stable id of the TV.
+ * @param {string} token - Token handed out by the TV.
+ * @returns {Promise<void>} Resolves once written; never rejects.
+ * @example
+ * await writeToken('uuid:261dc719-...', '12345678');
+ */
+async function writeToken(tvId, token) {
   const tokens = await readTokens();
   if (tokens[tvId] === token) {
     return;
   }
   tokens[tvId] = token;
+  const file = filePath();
+  const temporaryFile = `${file}.tmp`;
   try {
-    await mkdir(dirname(filePath()), { recursive: true });
-    await writeFile(filePath(), JSON.stringify(tokens, null, 2));
+    await mkdir(dirname(file), { recursive: true });
+    // Temporary file then rename, atomic on the same filesystem: a power cut
+    // can never leave a truncated file, which would lose EVERY TV's token. The
+    // token drives the TV remote: readable by its owner only.
+    await writeFile(temporaryFile, JSON.stringify(tokens, null, 2), { mode: 0o600 });
+    await rename(temporaryFile, file);
     logger.info(`Pairing token stored for ${tvId}`);
   } catch (err) {
     // Read-only /data would be a packaging bug, but a lost token only costs a
