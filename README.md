@@ -5,6 +5,14 @@ models onwards) over the local network: power, volume, mute and input source. No
 
 User documentation: [English](docs/en.md) · [Français](docs/fr.md)
 
+## Screenshots
+
+Two TVs on a dashboard: power, volume, mute and input source (installed apps included):
+
+![Samsung TVs on a Gladys dashboard](docs/images/dashboard.png)
+
+_Captured on a Gladys 5.1 dashboard with simulated devices and states — values are illustrative._
+
 ## Design
 
 Three protocols, each used for what it does best:
