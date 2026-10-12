@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildDevice, readTarget, setValue, FEATURE, PARAM } from '../src/television.js';
 import { parseSourceValue, appSourceValue } from '../src/samsung/keys.js';
-import { normalizeConfig } from '../src/config.js';
 import { createFakeGladys } from './helpers/fakeGladys.js';
 
 const INFO = {
@@ -34,15 +33,16 @@ function createdDevice({ mac = INFO.mac } = {}) {
   };
 }
 
-test('buildDevice exposes the six features with a valid poll frequency', () => {
+test('buildDevice exposes the six features, and leaves polling to the integration', () => {
   const gladys = createFakeGladys();
-  const device = buildDevice(gladys, INFO, normalizeConfig(), []);
+  const device = buildDevice(gladys, INFO, []);
 
   assert.equal(device.name, 'Samsung AU7025 55 TV');
   assert.equal(device.external_id, EXTERNAL_ID);
-  // Gladys only schedules polling on the values of DEVICE_POLL_FREQUENCIES,
-  // which are milliseconds: 300 (seconds) would silently never poll.
-  assert.equal(device.poll_frequency, 30000);
+  // The integration polls on its own timer (src/poller.js): Gladys must not
+  // poll the TV a second time.
+  assert.equal(device.poll_frequency, undefined);
+  assert.equal(device.should_poll, undefined);
   assert.deepEqual(
     device.features.map((f) => f.external_id.split(':').pop()),
     [
@@ -67,7 +67,7 @@ test('every feature declares min and max, which the database requires', () => {
   // t_device_feature.min and .max are NOT NULL for every feature, with no
   // exception for the types where a range means nothing: omitting them makes
   // device creation fail with a 422 the user cannot do anything about.
-  const device = buildDevice(createFakeGladys(), INFO, normalizeConfig(), []);
+  const device = buildDevice(createFakeGladys(), INFO, []);
   for (const feature of device.features) {
     assert.equal(typeof feature.min, 'number', `${feature.name} has no min`);
     assert.equal(typeof feature.max, 'number', `${feature.name} has no max`);
@@ -75,7 +75,7 @@ test('every feature declares min and max, which the database requires', () => {
 });
 
 test('buildDevice carries the IP and MAC needed to reach the TV', () => {
-  const device = buildDevice(createFakeGladys(), INFO, normalizeConfig(), []);
+  const device = buildDevice(createFakeGladys(), INFO, []);
   assert.deepEqual(device.params, [
     { name: PARAM.IP, value: '192.168.1.29' },
     { name: PARAM.MAC, value: 'B0:99:D7:BF:0C:AC' },
@@ -85,7 +85,7 @@ test('buildDevice carries the IP and MAC needed to reach the TV', () => {
 
 test('the source feature is a string select, extended by the installed apps', () => {
   const apps = [{ appId: '11101200001', name: 'Netflix' }];
-  const device = buildDevice(createFakeGladys(), INFO, normalizeConfig(), apps);
+  const device = buildDevice(createFakeGladys(), INFO, apps);
   const source = device.features.find((f) => f.external_id.endsWith(FEATURE.SOURCE));
 
   // Only `text`/`select` accepts string option values, which is what keeps them
@@ -100,7 +100,7 @@ test('the source feature is a string select, extended by the installed apps', ()
 });
 
 test('a TV that reports no apps still offers its physical sources', () => {
-  const device = buildDevice(createFakeGladys(), INFO, normalizeConfig(), []);
+  const device = buildDevice(createFakeGladys(), INFO, []);
   const source = device.features.find((f) => f.external_id.endsWith(FEATURE.SOURCE));
   assert.equal(source.supported_options.length, 2);
 });

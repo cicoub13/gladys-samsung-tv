@@ -7,9 +7,9 @@
 // -----------------------------------------------------------------------------
 
 /**
- * Refresh intervals Gladys accepts, in milliseconds: the core only schedules
- * polling on the values of its own DEVICE_POLL_FREQUENCIES list, so a value
- * outside it would be rejected at publication.
+ * Refresh intervals offered by the manifest, in milliseconds. The integration
+ * polls on its own timer at this interval (src/poller.js); the list is kept as
+ * it was when Gladys did the polling, so saved configurations stay valid.
  */
 export const POLL_FREQUENCIES = [10000, 15000, 30000, 60000];
 

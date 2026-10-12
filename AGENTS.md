@@ -5,11 +5,15 @@ the protocol overview table is in `README.md`.
 
 ## Architecture (`src/`)
 
-- `index.js`: wiring only (no protocol logic). Handlers: scan, setValue, poll, deviceDeleted, `test_connection`
+- `index.js`: wiring only (no protocol logic). Handlers: scan, setValue, deviceDeleted, `test_connection`
   action, configUpdated, `connected`/`disconnected`, shutdown, `unhandledRejection` (log then `exit(1)`).
-- `src/config.js`: `normalizeConfig()`; only real key is `poll_frequency`. The manifest select sends it as a
-  **string**; it is coerced to a number and must be in `POLL_FREQUENCIES` (`10000/15000/30000/60000`, the
-  core's `DEVICE_POLL_FREQUENCIES`), else falls back to `30000`.
+- `src/poller.js`: the integration's own polling loop (no `gladys.onPoll`: Gladys only polls devices created with
+  `should_poll: true`, which existing TVs lack). Started on `connected`, re-armed on config change, stopped on
+  `disconnected`/shutdown; the next run is scheduled only once the previous one settled (no overlap). Each run is
+  `pollTelevisions(gladys)` over `gladys.devices`, one failing TV logged and skipped.
+- `src/config.js`: `normalizeConfig()`; only real key is `poll_frequency` (ms, interval of `src/poller.js`). The
+  manifest select sends it as a **string**; it is coerced to a number and must be in `POLL_FREQUENCIES`
+  (`10000/15000/30000/60000`, kept for backward compatibility), else falls back to `30000`.
 - `src/discovery.js`: `gladys.scanNetwork('ssdp', 5 s)` → dedupe by `source_ip` → `fetchDeviceInfo(ip)` filters
   real TVs. MAC: TV's own `wifiMac` first, ARP `source_mac` from the scan as fallback. A refused scan returns `[]`.
 - `src/television.js`: device model (`buildDevice`), `pollDevice`, `setValue`, publish cache. Dispatch on the
@@ -51,6 +55,9 @@ the protocol overview table is in `README.md`.
   (`moved` Set).
 - `lastPublished` cache: only changed states are published, and only **after** Gladys accepted them (so refused
   batches retry). Cleared on every `connected`, per device on `onDeviceDeleted` (`forgetPublished`).
+- Command feedback (`publishFeedback`) bumps `feedbackCount`; a poll drops the states of features whose feedback is
+  newer than its start, so a poll that read the TV before a command never flips the state back.
+- The discovered payload carries no `poll_frequency`/`should_poll` on purpose (own timer, see `src/poller.js`).
 - `connect()` rejection is logged, not fatal: the SDK retries (Gladys closes with 4000 while booting).
 - Token writes: queued (parallel pairing during a scan), tmp file + `rename`, mode `0600`; a non-object or
   truncated file reads as `{}`; write errors are logged, never thrown.

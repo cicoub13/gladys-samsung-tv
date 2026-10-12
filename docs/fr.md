@@ -52,6 +52,13 @@ La liste des applications installées est demandée à la TV lors du scan, mais 
 suivants) ignorent cette requête. Le cas échéant, seules TV et HDMI apparaissent — c'est le comportement attendu, pas
 une panne. Relancez un scan après avoir installé une application : si votre modèle répond, elle sera ajoutée.
 
+## Rafraîchissement
+
+L'intégration relit l'état allumé/éteint, le volume et la sourdine de chaque TV selon l'**Intervalle de
+rafraîchissement** choisi dans les paramètres de l'intégration (toutes les 30 secondes par défaut, toutes les 10
+secondes au plus rapide). Un changement fait avec la télécommande, ou une TV réveillée par Wake-on-LAN, apparaît dans
+Gladys dans cet intervalle.
+
 ## Fonctionnement interne
 
 Trois canaux, chacun pour ce qu'il fait de mieux :
