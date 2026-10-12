@@ -49,6 +49,14 @@ export const PARAM = {
  */
 const lastPublished = new Map();
 
+/**
+ * Command feedbacks published so far, and the count each feature was at on its
+ * last one: a poll that read the TV before a command must not publish its now
+ * stale value over the feedback.
+ */
+let feedbackCount = 0;
+const feedbackAt = new Map();
+
 /** TVs whose address now leads to another device, so the warning is logged once. */
 const moved = new Set();
 
@@ -56,13 +64,12 @@ const moved = new Set();
  * Build the discovery payload of one TV.
  * @param {object} gladys - The SDK instance.
  * @param {object} info - Description read by `fetchDeviceInfo`.
- * @param {object} config - Normalized integration configuration.
  * @param {Array<{appId: string, name: string}>} [apps] - Installed apps, when the TV reported some.
  * @returns {object} The device, ready for `publishDiscoveredDevices`.
  * @example
- * const device = buildDevice(gladys, info, config, []);
+ * const device = buildDevice(gladys, info, []);
  */
-export function buildDevice(gladys, info, config, apps = []) {
+export function buildDevice(gladys, info, apps = []) {
   const ids = gladys.externalIds(DEVICE_TYPE, info.id);
   const sources = [
     ...STATIC_SOURCES,
@@ -72,7 +79,8 @@ export function buildDevice(gladys, info, config, apps = []) {
   return {
     name: info.name,
     external_id: ids.device,
-    poll_frequency: config.poll_frequency,
+    // No `poll_frequency` / `should_poll`: the integration polls on its own
+    // timer (src/poller.js), which also reaches the TVs created before.
     params: [
       { name: PARAM.IP, value: info.ip },
       { name: PARAM.MAC, value: info.mac ?? '' },
@@ -183,6 +191,7 @@ export function readTarget(device) {
  * await pollDevice(gladys, device);
  */
 export async function pollDevice(gladys, device) {
+  const startedAt = feedbackCount;
   const tv = readTarget(device);
   const ids = gladys.externalIds(DEVICE_TYPE, tv.id);
   const reached = await fetchDeviceInfo(tv.ip);
@@ -221,7 +230,30 @@ export async function pollDevice(gladys, device) {
     closeConnections(tv.id);
   }
 
-  await publishChanges(gladys, states);
+  await publishChanges(
+    gladys,
+    // A command answered while the TV was being read: its feedback is newer.
+    states.filter(({ external_id: id }) => (feedbackAt.get(id) ?? 0) <= startedAt),
+  );
+}
+
+/**
+ * Refresh every TV the user created. A TV that fails does not stop the others.
+ * @param {object} gladys - The SDK instance, whose `devices` are the created TVs.
+ * @returns {Promise<void>} Resolves once every TV was polled; never rejects.
+ * @example
+ * await pollTelevisions(gladys);
+ */
+export async function pollTelevisions(gladys) {
+  await Promise.all(
+    gladys.devices.map(async (device) => {
+      try {
+        await pollDevice(gladys, device);
+      } catch (err) {
+        logger.warn(`Could not refresh ${device.name ?? device.external_id}: ${err.message}`);
+      }
+    }),
+  );
 }
 
 /**
@@ -355,6 +387,8 @@ async function selectSource(tv, value) {
  * await publishFeedback(gladys, feature, 20);
  */
 async function publishFeedback(gladys, feature, state) {
+  feedbackCount += 1;
+  feedbackAt.set(feature.external_id, feedbackCount);
   await gladys.publishState(feature.external_id, state);
   lastPublished.set(feature.external_id, state);
 }

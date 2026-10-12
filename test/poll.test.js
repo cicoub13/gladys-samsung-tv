@@ -9,12 +9,15 @@ const IP = '192.168.1.29';
 // 8001 and 9197, and the runner executes the files in parallel.
 let tvPayload;
 let calls;
+// When set, the TV holds its volume answer until this promise settles.
+let volumeAnswered;
 
 const soapAnswer = (tag, value) =>
   `<s:Envelope><s:Body><${tag}>${value}</${tag}></s:Body></s:Envelope>`;
 
 beforeEach(() => {
   calls = [];
+  volumeAnswered = null;
   mock.method(globalThis, 'fetch', async (url, options = {}) => {
     calls.push(url);
     if (url.includes(':8001/')) {
@@ -22,6 +25,7 @@ beforeEach(() => {
     }
     const action = options.headers?.SOAPACTION ?? '';
     if (action.includes('#GetVolume')) {
+      await volumeAnswered;
       return new Response(soapAnswer('CurrentVolume', 17));
     }
     if (action.includes('#GetMute')) {
@@ -167,4 +171,35 @@ test('the warning comes back if the address changes hands again', async () => {
   await pollDevice(gladys, device);
 
   assert.equal(warnings.filter((line) => line.includes('different device')).length, 2);
+});
+
+test('a poll that read the TV before a command does not undo its feedback', async () => {
+  const device = createdDevice('uuid:race');
+  tvPayload = restPayload('uuid:race', 'on');
+  const gladys = createFakeGladys();
+  const volume = { external_id: feature(device, FEATURE.VOLUME) };
+  let answerVolume;
+  volumeAnswered = new Promise((resolve) => (answerVolume = resolve));
+
+  // The poll asks the volume (17) just before the user sets it to 40...
+  const polling = pollDevice(gladys, device);
+  while (!calls.some((url) => url.includes(':9197'))) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  await setValue(gladys, { device, feature: volume, value: 40 });
+  // ...and only gets the old answer once the command went through.
+  answerVolume();
+  await polling;
+
+  assert.deepEqual(
+    gladys.published.filter(({ featureExternalId }) => featureExternalId === volume.external_id),
+    [{ featureExternalId: volume.external_id, state: 40 }],
+  );
+
+  // The next poll is not affected: it reports what the TV says.
+  await pollDevice(gladys, device);
+  assert.deepEqual(gladys.published.at(-1), {
+    featureExternalId: volume.external_id,
+    state: 17,
+  });
 });

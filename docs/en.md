@@ -50,6 +50,12 @@ The list of installed applications is requested from the TV during the scan, but
 later) ignore that request. When that happens only TV and HDMI show up — that is expected behaviour, not a failure.
 Run a new scan after installing an app: if your model answers, it will be added.
 
+## Refresh
+
+The integration reads the power state, the volume and the mute state back from every TV at the **Refresh interval**
+chosen in the integration settings (every 30 seconds by default, every 10 seconds at the quickest). A change made with
+the remote, or a TV woken up by Wake-on-LAN, shows up in Gladys within that interval.
+
 ## How it works
 
 Three channels, each for what it does best:

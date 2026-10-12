@@ -27,6 +27,10 @@ The split matters: the WebSocket only carries key presses, so it can neither set
 UPnP can do both, deterministically. Turning the TV **on** is the exception: an off TV answers nothing, so the only
 way in is a Wake-on-LAN magic packet, emitted by the Gladys core on the integration's behalf.
 
+The integration polls its TVs on its own timer (`src/poller.js`), at the `poll_frequency` of its configuration, rather
+than through the Gladys device scheduler: Gladys only polls devices created with `should_poll: true`, which TVs
+created by earlier versions do not carry, and Discovery offers no update for a change outside the features.
+
 Discovery is mediated too: integration containers sit on a bridge network where SSDP never arrives, so the core runs
 the M-SEARCH and this integration interprets the answers. The declared search target (`RenderingControl:1`) is
 generic — recent Tizen models no longer announce the Samsung-specific `RemoteControlReceiver` — so the REST endpoint

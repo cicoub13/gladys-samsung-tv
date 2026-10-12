@@ -14,12 +14,13 @@ import { normalizeConfig } from './src/config.js';
 import { discoverTelevisions } from './src/discovery.js';
 import {
   buildDevice,
-  pollDevice,
+  pollTelevisions,
   setValue,
   readTarget,
   readApps,
   forgetPublished,
 } from './src/television.js';
+import { Poller } from './src/poller.js';
 import { fetchDeviceInfo, isPoweredOn } from './src/samsung/rest.js';
 import { getVolume } from './src/samsung/upnp.js';
 import { closeConnections } from './src/samsung/remote.js';
@@ -28,12 +29,20 @@ const gladys = new GladysIntegration();
 
 let config = normalizeConfig();
 
+// --- Polling: the integration reads its TVs back on its own timer ------------
+// Not through gladys.onPoll: Gladys only polls devices created with
+// `should_poll: true`, which the TVs already created do not carry.
+const poller = new Poller({
+  run: () => pollTelevisions(gladys),
+  interval: () => config.poll_frequency,
+});
+
 // --- Discovery: Gladys asks for the list of devices --------------------------
 gladys.onScanRequest(async () => {
   logger.info('onScanRequest -> scanning the network');
   const televisions = await discoverTelevisions(gladys);
   const devices = await Promise.all(
-    televisions.map(async (info) => buildDevice(gladys, info, config, await readApps(info))),
+    televisions.map(async (info) => buildDevice(gladys, info, await readApps(info))),
   );
   await gladys.publishDiscoveredDevices(devices);
 });
@@ -42,11 +51,6 @@ gladys.onScanRequest(async () => {
 gladys.onSetValue(async (device, feature, value) => {
   logger.info(`onSetValue <- ${feature.external_id} = ${value}`);
   await setValue(gladys, { device, feature, value });
-});
-
-// --- Polling: Gladys asks to refresh a device --------------------------------
-gladys.onPoll(async (device) => {
-  await pollDevice(gladys, device);
 });
 
 // --- A device disappeared: drop what we held for it --------------------------
@@ -81,6 +85,7 @@ gladys.onAction('test_connection', async (fields) => {
 gladys.onConfigUpdated(async (newConfig) => {
   logger.info('onConfigUpdated -> new configuration received');
   config = normalizeConfig(newConfig);
+  poller.rearm();
 });
 
 // --- Connection lifecycle ----------------------------------------------------
@@ -99,15 +104,19 @@ gladys.on('connected', async () => {
       })
       .catch(() => {});
   }
+  // Not awaited: the first run reads every TV, the handler need not wait for it.
+  poller.start();
 });
 
 gladys.on('disconnected', () => {
+  poller.stop();
   closeConnections();
 });
 
 // --- Graceful shutdown -------------------------------------------------------
 gladys.handleShutdown((signal) => {
   logger.info(`Received ${signal} -> graceful shutdown`);
+  poller.stop();
   closeConnections();
 });
 
