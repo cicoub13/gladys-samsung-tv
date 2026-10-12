@@ -53,6 +53,11 @@ gladys.onSetValue(async (device, feature, value) => {
   await setValue(gladys, { device, feature, value });
 });
 
+// --- Polling: a no-op, src/poller.js refreshes the TVs ----------------------
+// TVs created before the own timer still carry a poll_frequency. Should a
+// Gladys version start polling them, ack instead of answering "not implemented".
+gladys.onPoll(() => {});
+
 // --- A device disappeared: drop what we held for it --------------------------
 gladys.onDeviceDeleted(async (device) => {
   closeConnections(readTarget(device).id);
