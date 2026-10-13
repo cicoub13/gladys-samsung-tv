@@ -69,8 +69,11 @@ the protocol overview table is in `README.md`.
 
 ## Tests
 
-- `test/helpers/fakeGladys.js`: `createFakeGladys({ scanResults, publishFailures })` records `published`,
-  `discovered`, `wakeOnLanCalls`, `connectionStatuses`; `publishFailures` makes the next N publishes throw.
+- Fake Gladys: `createFakeGladys({ selector: 'samsung-tv', ... })` from `@gladysassistant/integration-sdk/testing`
+  (the selector matters: tests hard-code `ext:samsung-tv:` ids). SSDP results go in `scanResults: { ssdp: [...] }`
+  with the real shape `{ source_ip, source_mac?, source_port, headers: '<raw HTTP response>' }`. Read what Gladys
+  received from `gladys.fake.states` / `lastState()` / `requests` (JSON bodies). A refused publication:
+  `t.mock.method(gladys, 'publishStates')` + `mockImplementationOnce` throwing.
 - Real HTTP stubs listen on fixed ports `127.0.0.1:8001` (`discovery.test.js`) and `:9197` (`upnp.test.js`):
   **one server per file** in `before`, swap only the responder (restarting per test breaks undici keep-alive,
   `UND_ERR_SOCKET`). Other files stub `fetch` with `mock.method(globalThis, 'fetch', …)` since files run in parallel.
