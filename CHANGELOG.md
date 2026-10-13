@@ -6,6 +6,8 @@ follows [Semantic Versioning](https://semver.org/) and the
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-13
+
 ### Fixed
 
 - **Power, volume and mute changed with the remote now show up in Gladys.**
