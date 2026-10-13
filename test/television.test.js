@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildDevice, readTarget, setValue, FEATURE, PARAM } from '../src/television.js';
 import { parseSourceValue, appSourceValue } from '../src/samsung/keys.js';
-import { createFakeGladys } from './helpers/fakeGladys.js';
+import { createFakeGladys } from '@gladysassistant/integration-sdk/testing';
 
 const INFO = {
   id: 'uuid:261dc719-7a36-4104-ae2d-2c697882eea1',
@@ -14,6 +14,8 @@ const INFO = {
 };
 
 const EXTERNAL_ID = `ext:samsung-tv:tv:${INFO.id}`;
+
+const fakeGladys = () => createFakeGladys({ selector: 'samsung-tv' });
 
 /**
  * Build the device object Gladys sends back once the user created it.
@@ -34,7 +36,7 @@ function createdDevice({ mac = INFO.mac } = {}) {
 }
 
 test('buildDevice exposes the six features, and leaves polling to the integration', () => {
-  const gladys = createFakeGladys();
+  const gladys = fakeGladys();
   const device = buildDevice(gladys, INFO, []);
 
   assert.equal(device.name, 'Samsung AU7025 55 TV');
@@ -67,7 +69,7 @@ test('every feature declares min and max, which the database requires', () => {
   // t_device_feature.min and .max are NOT NULL for every feature, with no
   // exception for the types where a range means nothing: omitting them makes
   // device creation fail with a 422 the user cannot do anything about.
-  const device = buildDevice(createFakeGladys(), INFO, []);
+  const device = buildDevice(fakeGladys(), INFO, []);
   for (const feature of device.features) {
     assert.equal(typeof feature.min, 'number', `${feature.name} has no min`);
     assert.equal(typeof feature.max, 'number', `${feature.name} has no max`);
@@ -75,7 +77,7 @@ test('every feature declares min and max, which the database requires', () => {
 });
 
 test('buildDevice carries the IP and MAC needed to reach the TV', () => {
-  const device = buildDevice(createFakeGladys(), INFO, []);
+  const device = buildDevice(fakeGladys(), INFO, []);
   assert.deepEqual(device.params, [
     { name: PARAM.IP, value: '192.168.1.29' },
     { name: PARAM.MAC, value: 'B0:99:D7:BF:0C:AC' },
@@ -85,7 +87,7 @@ test('buildDevice carries the IP and MAC needed to reach the TV', () => {
 
 test('the source feature is a string select, extended by the installed apps', () => {
   const apps = [{ appId: '11101200001', name: 'Netflix' }];
-  const device = buildDevice(createFakeGladys(), INFO, apps);
+  const device = buildDevice(fakeGladys(), INFO, apps);
   const source = device.features.find((f) => f.external_id.endsWith(FEATURE.SOURCE));
 
   // Only `text`/`select` accepts string option values, which is what keeps them
@@ -100,7 +102,7 @@ test('the source feature is a string select, extended by the installed apps', ()
 });
 
 test('a TV that reports no apps still offers its physical sources', () => {
-  const device = buildDevice(createFakeGladys(), INFO, []);
+  const device = buildDevice(fakeGladys(), INFO, []);
   const source = device.features.find((f) => f.external_id.endsWith(FEATURE.SOURCE));
   assert.equal(source.supported_options.length, 2);
 });
@@ -114,19 +116,22 @@ test('readTarget recovers the TV id even though it contains colons', () => {
 });
 
 test('turning the TV on emits a magic packet and publishes nothing yet', async () => {
-  const gladys = createFakeGladys();
+  const gladys = fakeGladys();
   const feature = { external_id: `${EXTERNAL_ID}:${FEATURE.POWER}` };
 
   await setValue(gladys, { device: createdDevice(), feature, value: 1 });
 
-  assert.deepEqual(gladys.wakeOnLanCalls, [{ mac: 'B0:99:D7:BF:0C:AC', options: undefined }]);
+  assert.deepEqual(
+    gladys.fake.requests.filter(({ path }) => path === '/network/wake').map(({ body }) => body),
+    [{ mac: 'B0:99:D7:BF:0C:AC' }],
+  );
   // Wake-on-LAN is fire-and-forget: only the next poll knows whether the TV
   // actually woke up, so claiming success here would lie to the dashboard.
-  assert.deepEqual(gladys.published, []);
+  assert.deepEqual(gladys.fake.states, []);
 });
 
 test('turning on a TV with no known MAC fails with a readable message', async () => {
-  const gladys = createFakeGladys();
+  const gladys = fakeGladys();
   const feature = { external_id: `${EXTERNAL_ID}:${FEATURE.POWER}` };
 
   await assert.rejects(
@@ -138,7 +143,7 @@ test('turning on a TV with no known MAC fails with a readable message', async ()
 test('an unknown feature is rejected instead of silently ignored', async () => {
   await assert.rejects(
     () =>
-      setValue(createFakeGladys(), {
+      setValue(fakeGladys(), {
         device: createdDevice(),
         feature: { external_id: `${EXTERNAL_ID}:teleport` },
         value: 1,

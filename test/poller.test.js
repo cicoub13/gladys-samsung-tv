@@ -2,7 +2,7 @@ import test, { beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { Poller } from '../src/poller.js';
 import { pollTelevisions, FEATURE, PARAM } from '../src/television.js';
-import { createFakeGladys } from './helpers/fakeGladys.js';
+import { createFakeGladys } from '@gladysassistant/integration-sdk/testing';
 
 // `fetch` is stubbed (the other test files listen on 8001 and 9197) and every
 // TV is in standby: only the REST endpoint is read, once per TV and per poll.
@@ -43,6 +43,11 @@ function createdDevice(ip) {
 
 const polls = (ip) => restCalls.filter((called) => called === ip).length;
 
+const fakeGladys = () => createFakeGladys({ selector: 'samsung-tv' });
+
+const publishedIds = (gladys) =>
+  gladys.fake.states.map(({ device_feature_external_id: id }) => id).sort();
+
 /**
  * Let the runs a fired timer started settle (timers are mocked, setImmediate is not).
  * @returns {Promise<void>} Resolves a few event-loop turns later.
@@ -82,13 +87,13 @@ function controlledRuns() {
 
 test('every created TV is polled at once, then at each interval', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const gladys = createFakeGladys();
+  const gladys = fakeGladys();
   gladys.devices = [createdDevice('10.0.0.1'), createdDevice('10.0.0.2')];
   const poller = new Poller({ run: () => pollTelevisions(gladys), interval: () => 30000 });
 
   await poller.start();
   assert.deepEqual([polls('10.0.0.1'), polls('10.0.0.2')], [1, 1]);
-  assert.deepEqual(gladys.published.map(({ featureExternalId }) => featureExternalId).sort(), [
+  assert.deepEqual(publishedIds(gladys), [
     `ext:samsung-tv:tv:uuid:10.0.0.1:${FEATURE.POWER}`,
     `ext:samsung-tv:tv:uuid:10.0.0.2:${FEATURE.POWER}`,
   ]);
@@ -156,17 +161,20 @@ test('a TV that fails does not stop the others nor the loop', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   mock.method(console, 'error', () => {});
   // The first publication is refused: one of the two TVs fails its first poll.
-  const gladys = createFakeGladys({ publishFailures: 1 });
+  const gladys = fakeGladys();
+  t.mock.method(gladys, 'publishStates').mock.mockImplementationOnce(async () => {
+    throw new Error('503 Service Unavailable');
+  });
   gladys.devices = [createdDevice('10.0.1.1'), createdDevice('10.0.1.2')];
   const poller = new Poller({ run: () => pollTelevisions(gladys), interval: () => 30000 });
 
   await poller.start();
-  assert.equal(gladys.published.length, 1, 'the other TV got its state');
+  assert.equal(gladys.fake.states.length, 1, 'the other TV got its state');
 
   t.mock.timers.tick(30000);
   await settle();
   assert.deepEqual(
-    gladys.published.map(({ featureExternalId }) => featureExternalId).sort(),
+    publishedIds(gladys),
     [
       `ext:samsung-tv:tv:uuid:10.0.1.1:${FEATURE.POWER}`,
       `ext:samsung-tv:tv:uuid:10.0.1.2:${FEATURE.POWER}`,

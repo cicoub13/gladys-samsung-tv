@@ -53,10 +53,12 @@ the protocol overview table is in `README.md`.
   closes the WS socket when off.
 - Poll checks the uuid answering at the IP; a different TV (DHCP swap) is treated as unreachable, warned once
   (`moved` Set).
-- `lastPublished` cache: only changed states are published, and only **after** Gladys accepted them (so refused
-  batches retry). Cleared on every `connected`, per device on `onDeviceDeleted` (`forgetPublished`).
+- Poll and command feedback both publish through `gladys.publishChangedStates` (SDK dedup: only changed values,
+  remembered once Gladys accepted them so refused ones retry, calls serialised in call order, forgotten by the SDK on
+  device created/updated/deleted). `index.js` calls `gladys.forgetPublishedStates()` on every `connected`.
 - Command feedback (`publishFeedback`) bumps `feedbackCount`; a poll drops the states of features whose feedback is
-  newer than its start, so a poll that read the TV before a command never flips the state back.
+  newer than its start, so a poll that read the TV before a command never flips the state back. The filter runs
+  synchronously right before `publishChangedStates`, so the serialised order keeps the feedback last.
 - The discovered payload carries no `poll_frequency`/`should_poll` on purpose (own timer, see `src/poller.js`).
 - `connect()` rejection is logged, not fatal: the SDK retries (Gladys closes with 4000 while booting).
 - Token writes: queued (parallel pairing during a scan), tmp file + `rename`, mode `0600`; a non-object or
@@ -67,12 +69,15 @@ the protocol overview table is in `README.md`.
 
 ## Tests
 
-- `test/helpers/fakeGladys.js`: `createFakeGladys({ scanResults, publishFailures })` records `published`,
-  `discovered`, `wakeOnLanCalls`, `connectionStatuses`; `publishFailures` makes the next N publishes throw.
+- Fake Gladys: `createFakeGladys({ selector: 'samsung-tv', ... })` from `@gladysassistant/integration-sdk/testing`
+  (the selector matters: tests hard-code `ext:samsung-tv:` ids). SSDP results go in `scanResults: { ssdp: [...] }`
+  with the real shape `{ source_ip, source_mac?, source_port, headers: '<raw HTTP response>' }`. Read what Gladys
+  received from `gladys.fake.states` / `lastState()` / `requests` (JSON bodies). A refused publication:
+  `t.mock.method(gladys, 'publishStates')` + `mockImplementationOnce` throwing.
 - Real HTTP stubs listen on fixed ports `127.0.0.1:8001` (`discovery.test.js`) and `:9197` (`upnp.test.js`):
   **one server per file** in `before`, swap only the responder (restarting per test breaks undici keep-alive,
   `UND_ERR_SOCKET`). Other files stub `fetch` with `mock.method(globalThis, 'fetch', …)` since files run in parallel.
-- `poll.test.js`: use a distinct uuid per test, the module-level publish cache leaks otherwise.
+- `poll.test.js`: use a distinct uuid per test, the module-level feedback record (`feedbackAt`) leaks otherwise.
 - `lifecycle.test.js` spawns `index.js` as a child process against a `ws` stub of Gladys.
 - `tokenStore.test.js` sets `DATA_DIR` to a temp dir. Fixtures in `rest`/`upnp` tests are verbatim captures from
   a real UE55AU7025KXXC. `remote.js` (WebSocket) has no unit tests.

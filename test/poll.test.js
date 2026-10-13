@@ -1,7 +1,7 @@
 import test, { beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { pollDevice, setValue, forgetPublished, FEATURE, PARAM } from '../src/television.js';
-import { createFakeGladys } from './helpers/fakeGladys.js';
+import { pollDevice, setValue, FEATURE, PARAM } from '../src/television.js';
+import { createFakeGladys } from '@gladysassistant/integration-sdk/testing';
 
 const IP = '192.168.1.29';
 
@@ -52,7 +52,7 @@ function restPayload(id, powerState) {
 }
 
 /**
- * A created device, one uuid per test so the publication cache never leaks between them.
+ * A created device, one uuid per test so the module-level feedback record never leaks between them.
  * @param {string} id - UPnP uuid of the TV.
  * @returns {object} The device as Gladys sends it.
  * @example
@@ -67,86 +67,65 @@ function createdDevice(id) {
 
 const feature = (device, key) => `${device.external_id}:${key}`;
 
-test('a state Gladys refused is published again on the next poll', async () => {
+const fakeGladys = () => createFakeGladys({ selector: 'samsung-tv' });
+
+/**
+ * A fake Gladys whose host API refuses the next publication (Gladys restarting, 429...).
+ * @param {object} t - The test context, whose mocks are restored at its end.
+ * @returns {object} The fake Gladys.
+ * @example
+ * const gladys = refusingGladys(t);
+ */
+function refusingGladys(t) {
+  const gladys = fakeGladys();
+  t.mock.method(gladys, 'publishStates').mock.mockImplementationOnce(async () => {
+    throw new Error('503 Service Unavailable');
+  });
+  return gladys;
+}
+
+test('a state Gladys refused is published again on the next poll', async (t) => {
   const device = createdDevice('uuid:refused');
   tvPayload = restPayload('uuid:refused', 'standby');
-  const gladys = createFakeGladys({ publishFailures: 1 });
+  const gladys = refusingGladys(t);
 
   await assert.rejects(() => pollDevice(gladys, device), /503/);
   await pollDevice(gladys, device);
 
-  assert.deepEqual(gladys.published, [
-    { featureExternalId: feature(device, FEATURE.POWER), state: 0 },
+  assert.deepEqual(gladys.fake.states, [
+    { device_feature_external_id: feature(device, FEATURE.POWER), state: 0 },
   ]);
 });
 
-test('a command feedback Gladys refused is published again on the next poll', async () => {
+test('a command feedback Gladys refused is published again on the next poll', async (t) => {
   const device = createdDevice('uuid:feedback');
-  const gladys = createFakeGladys({ publishFailures: 1 });
+  const gladys = refusingGladys(t);
   const mute = { external_id: feature(device, FEATURE.MUTE) };
 
   await assert.rejects(() => setValue(gladys, { device, feature: mute, value: 1 }), /503/);
   tvPayload = restPayload('uuid:feedback', 'on');
   await pollDevice(gladys, device);
 
-  assert.ok(
-    gladys.published.some(
-      ({ featureExternalId, state }) => featureExternalId === mute.external_id && state === 1,
-    ),
+  assert.equal(
+    gladys.fake.lastState(mute.external_id),
+    1,
     'the mute state the TV reports reaches Gladys',
   );
-});
-
-test('a device created again gets its states published at once', async () => {
-  const device = createdDevice('uuid:recreated');
-  tvPayload = restPayload('uuid:recreated', 'standby');
-  const gladys = createFakeGladys();
-
-  await pollDevice(gladys, device);
-  forgetPublished(device);
-  await pollDevice(gladys, device);
-
-  assert.equal(gladys.published.length, 2);
-});
-
-test('forgetting a device leaves the other devices alone', async () => {
-  const kept = createdDevice('uuid:kept');
-  const deleted = createdDevice('uuid:kept-2');
-  const gladys = createFakeGladys();
-
-  tvPayload = restPayload('uuid:kept', 'standby');
-  await pollDevice(gladys, kept);
-  forgetPublished(deleted);
-  await pollDevice(gladys, kept);
-
-  assert.equal(gladys.published.length, 1);
-});
-
-test('after a reconnection every state is published again', async () => {
-  const device = createdDevice('uuid:reconnected');
-  tvPayload = restPayload('uuid:reconnected', 'standby');
-  const gladys = createFakeGladys();
-
-  await pollDevice(gladys, device);
-  forgetPublished();
-  await pollDevice(gladys, device);
-
-  assert.equal(gladys.published.length, 2);
 });
 
 test('another TV answering at the address counts as unreachable, with one warning', async () => {
   const device = createdDevice('uuid:living-room');
   // DHCP handed the living-room address to the bedroom TV.
   tvPayload = restPayload('uuid:bedroom', 'on');
-  const gladys = createFakeGladys();
+  const gladys = fakeGladys();
   const warnings = [];
   mock.method(console, 'error', (...args) => warnings.push(args.join(' ')));
 
   await pollDevice(gladys, device);
   await pollDevice(gladys, device);
 
-  assert.deepEqual(gladys.published, [
-    { featureExternalId: feature(device, FEATURE.POWER), state: 0 },
+  assert.deepEqual(gladys.fake.states, [
+    { device_feature_external_id: feature(device, FEATURE.POWER), state: 0 },
   ]);
   assert.ok(
     calls.every((url) => !url.includes(':9197')),
@@ -159,7 +138,7 @@ test('another TV answering at the address counts as unreachable, with one warnin
 
 test('the warning comes back if the address changes hands again', async () => {
   const device = createdDevice('uuid:moving');
-  const gladys = createFakeGladys();
+  const gladys = fakeGladys();
   const warnings = [];
   mock.method(console, 'error', (...args) => warnings.push(args.join(' ')));
 
@@ -176,7 +155,7 @@ test('the warning comes back if the address changes hands again', async () => {
 test('a poll that read the TV before a command does not undo its feedback', async () => {
   const device = createdDevice('uuid:race');
   tvPayload = restPayload('uuid:race', 'on');
-  const gladys = createFakeGladys();
+  const gladys = fakeGladys();
   const volume = { external_id: feature(device, FEATURE.VOLUME) };
   let answerVolume;
   volumeAnswered = new Promise((resolve) => (answerVolume = resolve));
@@ -192,14 +171,14 @@ test('a poll that read the TV before a command does not undo its feedback', asyn
   await polling;
 
   assert.deepEqual(
-    gladys.published.filter(({ featureExternalId }) => featureExternalId === volume.external_id),
-    [{ featureExternalId: volume.external_id, state: 40 }],
+    gladys.fake.states.filter(({ device_feature_external_id: id }) => id === volume.external_id),
+    [{ device_feature_external_id: volume.external_id, state: 40 }],
   );
 
   // The next poll is not affected: it reports what the TV says.
   await pollDevice(gladys, device);
-  assert.deepEqual(gladys.published.at(-1), {
-    featureExternalId: volume.external_id,
+  assert.deepEqual(gladys.fake.states.at(-1), {
+    device_feature_external_id: volume.external_id,
     state: 17,
   });
 });
