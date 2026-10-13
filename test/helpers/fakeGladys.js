@@ -16,6 +16,7 @@ export function createFakeGladys({ scanResults = [], publishFailures = 0 } = {})
       throw new Error('503 Service Unavailable');
     }
   };
+  const lastPublished = new Map();
   const discovered = [];
   const wakeOnLanCalls = [];
   const connectionStatuses = [];
@@ -45,6 +46,20 @@ export function createFakeGladys({ scanResults = [], publishFailures = 0 } = {})
       for (const s of states) {
         published.push({ featureExternalId: s.device_feature_external_id, state: s.state });
       }
+    },
+
+    // The SDK contract: only changed values are sent, remembered once accepted.
+    async publishChangedStates(states) {
+      const changed = states.filter(
+        ({ device_feature_external_id: id, state }) => lastPublished.get(id) !== state,
+      );
+      if (changed.length > 0) {
+        await this.publishStates(changed);
+        changed.forEach(({ device_feature_external_id: id, state }) =>
+          lastPublished.set(id, state),
+        );
+      }
+      return { success: true, count: changed.length };
     },
 
     async publishDiscoveredDevices(devices) {

@@ -43,13 +43,6 @@ export const PARAM = {
 };
 
 /**
- * Last value published per feature, to publish changes only: the host API
- * rate-limits states, and a TV that nobody touches would otherwise republish
- * the same three values forever.
- */
-const lastPublished = new Map();
-
-/**
  * Command feedbacks published so far, and the count each feature was at on its
  * last one: a poll that read the TV before a command must not publish its now
  * stale value over the feedback.
@@ -211,7 +204,7 @@ export async function pollDevice(gladys, device) {
   }
   const on = isPoweredOn(info);
 
-  const states = [{ external_id: ids.feature(FEATURE.POWER), state: on ? 1 : 0 }];
+  const states = [{ device_feature_external_id: ids.feature(FEATURE.POWER), state: on ? 1 : 0 }];
 
   if (on) {
     // Only worth reading when the TV is awake: UPnP would just time out
@@ -219,8 +212,8 @@ export async function pollDevice(gladys, device) {
     try {
       const [volume, muted] = await Promise.all([getVolume(tv.ip), getMute(tv.ip)]);
       states.push(
-        { external_id: ids.feature(FEATURE.VOLUME), state: volume },
-        { external_id: ids.feature(FEATURE.MUTE), state: muted ? 1 : 0 },
+        { device_feature_external_id: ids.feature(FEATURE.VOLUME), state: volume },
+        { device_feature_external_id: ids.feature(FEATURE.MUTE), state: muted ? 1 : 0 },
       );
     } catch (err) {
       logger.warn(`Could not read the volume of ${tv.ip}: ${err.message}`);
@@ -230,10 +223,13 @@ export async function pollDevice(gladys, device) {
     closeConnections(tv.id);
   }
 
-  await publishChanges(
-    gladys,
+  // Only the changed states reach Gladys: the host API rate-limits them, and a
+  // TV nobody touches would otherwise republish the same values forever. The
+  // SDK runs these calls in call order, so a feedback published after this
+  // filter is never overwritten by the stale values it dropped.
+  await gladys.publishChangedStates(
     // A command answered while the TV was being read: its feedback is newer.
-    states.filter(({ external_id: id }) => (feedbackAt.get(id) ?? 0) <= startedAt),
+    states.filter(({ device_feature_external_id: id }) => (feedbackAt.get(id) ?? 0) <= startedAt),
   );
 }
 
@@ -254,46 +250,6 @@ export async function pollTelevisions(gladys) {
       }
     }),
   );
-}
-
-/**
- * Publish the states that actually changed since the last poll.
- * @param {object} gladys - The SDK instance.
- * @param {Array<{external_id: string, state: number}>} states - Freshly read states.
- * @returns {Promise<void>} Resolves once published.
- * @example
- * await publishChanges(gladys, states);
- */
-async function publishChanges(gladys, states) {
-  const changed = states.filter(({ external_id: id, state }) => lastPublished.get(id) !== state);
-  if (changed.length === 0) {
-    return;
-  }
-  await gladys.publishStates(
-    changed.map(({ external_id: id, state }) => ({ device_feature_external_id: id, state })),
-  );
-  // Only once Gladys has them: a refused batch must be sent again next poll.
-  changed.forEach(({ external_id: id, state }) => lastPublished.set(id, state));
-}
-
-/**
- * Forget what was published, so the next poll publishes every state again.
- * @param {object} [device] - Device whose states to forget; every device when omitted.
- * @returns {void} Nothing.
- * @example
- * forgetPublished(device);
- */
-export function forgetPublished(device) {
-  if (!device) {
-    lastPublished.clear();
-    return;
-  }
-  const prefix = `${device.external_id}:`;
-  for (const id of lastPublished.keys()) {
-    if (id.startsWith(prefix)) {
-      lastPublished.delete(id);
-    }
-  }
 }
 
 /**
@@ -378,7 +334,8 @@ async function selectSource(tv, value) {
 }
 
 /**
- * Publish the new value of a feature that has feedback, and remember it.
+ * Publish the new value of a feature that has feedback, through the same
+ * deduplicated path as the poll, so the next poll does not send it again.
  * @param {object} gladys - The SDK instance.
  * @param {object} feature - The actioned feature.
  * @param {number} state - The value the TV now holds.
@@ -389,8 +346,7 @@ async function selectSource(tv, value) {
 async function publishFeedback(gladys, feature, state) {
   feedbackCount += 1;
   feedbackAt.set(feature.external_id, feedbackCount);
-  await gladys.publishState(feature.external_id, state);
-  lastPublished.set(feature.external_id, state);
+  await gladys.publishChangedStates([{ device_feature_external_id: feature.external_id, state }]);
 }
 
 /**

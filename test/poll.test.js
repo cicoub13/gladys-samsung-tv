@@ -1,6 +1,6 @@
 import test, { beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { pollDevice, setValue, forgetPublished, FEATURE, PARAM } from '../src/television.js';
+import { pollDevice, setValue, FEATURE, PARAM } from '../src/television.js';
 import { createFakeGladys } from './helpers/fakeGladys.js';
 
 const IP = '192.168.1.29';
@@ -52,7 +52,7 @@ function restPayload(id, powerState) {
 }
 
 /**
- * A created device, one uuid per test so the publication cache never leaks between them.
+ * A created device, one uuid per test so the module-level feedback record never leaks between them.
  * @param {string} id - UPnP uuid of the TV.
  * @returns {object} The device as Gladys sends it.
  * @example
@@ -95,43 +95,6 @@ test('a command feedback Gladys refused is published again on the next poll', as
     ),
     'the mute state the TV reports reaches Gladys',
   );
-});
-
-test('a device created again gets its states published at once', async () => {
-  const device = createdDevice('uuid:recreated');
-  tvPayload = restPayload('uuid:recreated', 'standby');
-  const gladys = createFakeGladys();
-
-  await pollDevice(gladys, device);
-  forgetPublished(device);
-  await pollDevice(gladys, device);
-
-  assert.equal(gladys.published.length, 2);
-});
-
-test('forgetting a device leaves the other devices alone', async () => {
-  const kept = createdDevice('uuid:kept');
-  const deleted = createdDevice('uuid:kept-2');
-  const gladys = createFakeGladys();
-
-  tvPayload = restPayload('uuid:kept', 'standby');
-  await pollDevice(gladys, kept);
-  forgetPublished(deleted);
-  await pollDevice(gladys, kept);
-
-  assert.equal(gladys.published.length, 1);
-});
-
-test('after a reconnection every state is published again', async () => {
-  const device = createdDevice('uuid:reconnected');
-  tvPayload = restPayload('uuid:reconnected', 'standby');
-  const gladys = createFakeGladys();
-
-  await pollDevice(gladys, device);
-  forgetPublished();
-  await pollDevice(gladys, device);
-
-  assert.equal(gladys.published.length, 2);
 });
 
 test('another TV answering at the address counts as unreachable, with one warning', async () => {
